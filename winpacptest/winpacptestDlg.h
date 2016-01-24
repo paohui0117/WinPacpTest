@@ -11,14 +11,13 @@
 #pragma comment(lib ,"iphlpapi.lib")
 #include <vector>
 #include <map>
-
+using namespace std;
 // CwinpacptestDlg 对话框
 class CwinpacptestDlg : public CDialogEx
 {
 // 构造
 public:
 	CwinpacptestDlg(CWnd* pParent = NULL);	// 标准构造函数
-
 // 对话框数据
 #ifdef AFX_DESIGN_TIME
 	enum { IDD = IDD_WINPACPTEST_DIALOG };
@@ -66,9 +65,12 @@ private:
 	IP_ADAPTER_INFO*	m_pADAPTER_INFO;
 	HANDLE				m_HSendArp;
 	HANDLE				m_HGetArp;
+	int					m_curIP;
+	char*				m_curMAC;
 public:
 	IP_ADAPTER_INFO*	m_pCur;
 	pcap_t *			m_adhandle;
 	bool				m_bRun;
-	std::map<int, char*>	m_vecIP;
+	std::map<int, char*>	m_mapARP;
+	afx_msg void OnBnClickedBtnTest();
 };

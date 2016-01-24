@@ -2,6 +2,8 @@
 #include "CommonHead.h"
 #include <ws2tcpip.h>
 
+
+
 ProtocolType GetProtocolType(char* p)
 {
 	if (!p)
@@ -137,39 +139,28 @@ UINT	WStrToIP4(LPCWSTR strIP)
 	return *(UINT*)pIP;
 }
 
-bool GetIP4Range(UINT GatewayIP, UINT nMask, UINT& SIP, UINT& EIP)	//获取局域网IP范围
+bool GetIP4Range(UINT IP, UINT nMask, UINT& SIP, UINT& EIP)	//获取局域网IP范围
 {
-	int nLength = 32;
-	while (nMask > 0)
-	{
-		nLength--;
-		nMask = nMask >> 1;
-	}
-	if (nLength <= 0)
+	if (IP == 0)
 		return false;
-	BYTE* pIP = (BYTE*)&GatewayIP;
-	pIP[3] += 1;
-	int ntemp = nLength / 8;
-	if (pIP[3] == 0)
-		pIP[2]++;
-	SIP = *(UINT*)pIP;
-	int nSize = pow(2, nLength);
-	nSize--;		//去掉头
-	int n = 255 - pIP[3];
-	n = nSize - n;
-	if (n > 0)
+	UCHAR* pIP = (UCHAR*)&IP;
+	UCHAR* pMask = (UCHAR*)&nMask;
+	EIP = SIP = IP;
+	if (pMask[3] == 255)
+		return true;
+	UCHAR* pSIP = (UCHAR*)&SIP;
+	pSIP[3] = 1;
+	UCHAR* pEIP = (UCHAR*)&EIP;
+	pEIP[3] = 255;
+	int nLength = 0;
+	while(pMask[3 - nLength] == 0 && nLength < 4)
 	{
-		if (ntemp > 1)
-		{
-			pIP[2]++;
-			pIP[3] = n;
-		}
-		else
-			pIP[3] = 254;
+		nLength++;
 	}
-	else
-		pIP[3] += nSize;
-	EIP = *(UINT*)pIP;
+	int nCur = 3 - nLength;
+	UCHAR temp = ~pMask[nCur];
+	pSIP[nCur] = pIP[nCur] & pMask[nCur];
+	pEIP[nCur] = pSIP[nCur] + temp;
 	return TRUE;
 }
 int		ReverseUINT(int n)

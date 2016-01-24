@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "ICMPHead.h"
-
+const char* c_pData = "abcdefghijklmnopqrstuvwabcdefghi";
 bool SetICMPPingData(const ICMPPing& PingData, char* pData, int nLength)
 {
 	if (!pData)
@@ -13,10 +13,8 @@ bool SetICMPPingData(const ICMPPing& PingData, char* pData, int nLength)
 	pData[5] = PingData.nNotify & 0x00ff;
 	pData[6] = PingData.nNo >> 8;
 	pData[7] = PingData.nNo & 0x00ff;
-	
 	SHORT temp = checksum((USHORT*)pData, nLength);
-	pData[2] = temp >> 8;
-	pData[3] = temp & 0x00ff;
+	*(short*)(pData + 2) = temp;
 	return true;
 }
 

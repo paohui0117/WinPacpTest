@@ -1,6 +1,6 @@
 #include "stdafx.h"
 #include "CommonFun.h"
-
+const bool g_bBigEndian = BigEndian();
 std::string WStrToStr(LPCWSTR strIn)
 {
 	if (strIn == nullptr)

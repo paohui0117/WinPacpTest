@@ -25,6 +25,7 @@ struct DLC_HEAD  //物理帧头 14字节  Ethernet V2(ARPA)
 	UCHAR	SourceMAC[6];		//源MAC
 	short	Ethertype;			//0x0806是ARP帧的类型值
 };
+
 ProtocolType GetProtocolType(char* p);
 bool SetDLCHEADData(char* pData, const DLC_HEAD& dlc_head);
 bool GetDLCHEADData(char* p_data, DLC_HEAD& dlc_head);
@@ -34,8 +35,9 @@ CString Ip6toStr(sockaddr* addr);
 CString GetMAC(BYTE* pMac, int nlength);
 UINT	StrToIP4(LPCSTR strIP);
 UINT	WStrToIP4(LPCWSTR strIP);
-bool	GetIP4Range(UINT GatewayIP, UINT nMask, UINT& SIP, UINT& EIP);	//获取局域网IP范围
+bool	GetIP4Range(UINT IP, UINT nMask, UINT& SIP, UINT& EIP);	//获取局域网IP范围
 int		ReverseUINT(int n);
+
 ///////common/////////////////////////////////////////////////////////////////////////////
 #endif
 

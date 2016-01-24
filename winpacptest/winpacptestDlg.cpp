@@ -57,7 +57,7 @@ unsigned  WINAPI SendAllARP(void* pVoid)
 		return -1;
 	UINT nStar = 0;
 	UINT nEnd = 0;
-	if (!GetIP4Range(StrToIP4(pDlg->m_pCur->GatewayList.IpAddress.String), StrToIP4(pDlg->m_pCur->IpAddressList.IpMask.String), nStar, nEnd))
+	if (!GetIP4Range(StrToIP4(pDlg->m_pCur->IpAddressList.IpAddress.String), StrToIP4(pDlg->m_pCur->IpAddressList.IpMask.String), nStar, nEnd))
 		return -1;
 	ARPFrame arpdata;
 	arpdata.HardwareType = 1;
@@ -83,13 +83,6 @@ unsigned  WINAPI SendAllARP(void* pVoid)
 		}
 		Sleep(10);
 	}
-	arpdata.DestinationIP = WStrToIP4(L"93.123.23.1");
-	FillARPData((char*)pData, 60, &arpdata);
-	OutputDebugStringW(IptoStr(arpdata.DestinationIP) + L"\r\n");
-	if (pcap_sendpacket(pDlg->m_adhandle, (UCHAR*)pData, 60) != 0)
-	{
-		OutputDebugStringW(L"发送ARP包失败");
-	}
 	return 1;
 }
 unsigned  WINAPI GetAllARP(void* pVoid)
@@ -102,7 +95,7 @@ unsigned  WINAPI GetAllARP(void* pVoid)
 	const u_char *pkt_data;
 	time_t local_tv_sec;
 	ARPFrame data;
-	pDlg->m_vecIP.clear();
+	pDlg->m_mapARP.clear();
 	IPV4HeadFrame temp;
 	ICMPPing tempPing;
 	USHORT st;
@@ -120,6 +113,11 @@ unsigned  WINAPI GetAllARP(void* pVoid)
 			SetICMPPingData(tempPing, buffer, temp.TotalLength - temp.HeadLength * 4);
 			st = checksum((USHORT*)(pkt_data + 14 + temp.HeadLength * 4), temp.TotalLength - temp.HeadLength * 4);
 			
+		}
+		else if (GetProtocolType((char*)pkt_data) == PT_ARP)
+		{
+			GetARPData((char*)pkt_data, data, true);
+			pDlg->InsetIPData(data.SourceIP, (char*)data.SourceMAC);
 		}
 	}
 	return 1;
@@ -154,6 +152,7 @@ BEGIN_MESSAGE_MAP(CwinpacptestDlg, CDialogEx)
 	ON_WM_DESTROY()
 	ON_CBN_SELCHANGE(IDC_COM_NIC, &CwinpacptestDlg::OnCbnSelchangeComNic)
 	ON_BN_CLICKED(IDC_BTN_SEARCH, &CwinpacptestDlg::OnBnClickedBtnSearch)
+	ON_BN_CLICKED(IDC_BTN_TEST, &CwinpacptestDlg::OnBnClickedBtnTest)
 END_MESSAGE_MAP()
 
 
@@ -343,7 +342,7 @@ void CwinpacptestDlg::SetListInfo(IP_ADAPTER_INFO * d)
 		m_pPropertyGateway->AddSubItem(new CMFCPropertyGridProperty(L"IpMask", StrToWstr(pIP->IpMask.String)));
 		UINT nStar = 0;
 		UINT nEnd = 0;
-		GetIP4Range(StrToIP4(pIP->IpAddress.String), StrToIP4(d->IpAddressList.IpMask.String), nStar, nEnd);
+		GetIP4Range(StrToIP4(d->IpAddressList.IpAddress.String), StrToIP4(d->IpAddressList.IpMask.String), nStar, nEnd);
 		strDescription.Format(L"%s - %s", IptoStr(nStar), IptoStr(nEnd));
 		m_pPropertyCommon->AddSubItem(new CMFCPropertyGridProperty(L"子网IP范围", strDescription, L"子网IP范围"));
 		pIP = pIP->Next;
@@ -384,8 +383,30 @@ void CwinpacptestDlg::InitIPList()
 
 void CwinpacptestDlg::InsetIPData(int IP, char* p)
 {
-	m_list_ip.InsertItem(0, IptoStr(IP));
-	m_list_ip.SetItemText(0, 1, GetMAC((BYTE*)p, 6));
+	if (!p || IP == m_curIP)
+		return;
+	std::map<int, char*>::iterator itor = m_mapARP.find(IP);
+	if (itor != m_mapARP.end())
+	{
+		memcpy(itor->second, p, 6);
+		int n = 0;
+		std::map<int, char*>::iterator temp = m_mapARP.begin();
+		while (temp != itor)
+		{
+			temp++;
+			n++;
+		}
+		m_list_ip.SetItemText(n, 1, GetMAC((BYTE*)itor->second, 6));
+	}
+	else
+	{
+		char* temp = new char[6];
+		memcpy(temp, p, 6);
+		m_list_ip.InsertItem(m_mapARP.size(), IptoStr(IP));
+		m_list_ip.SetItemText(m_mapARP.size(), 1, GetMAC((BYTE*)p, 6));
+		m_mapARP.insert(pair<int,char*>(IP, temp));
+	}
+	
 }
 
 void CwinpacptestDlg::OnDestroy()
@@ -451,11 +472,14 @@ void CwinpacptestDlg::OnBnClickedBtnSearch()
 	m_pCur = m_pADAPTER_INFO;
 	while (ncur > 0)
 	{
+		m_curIP = 0;
 		ncur--;
 		m_pCur = m_pCur->Next;
 		if (!m_pCur)
 			return;
 	}
+	m_curIP = StrToIP4(m_pCur->IpAddressList.IpAddress.String);
+	m_curMAC = (char*)m_pCur->Address;
 	char errbuf[PCAP_ERRBUF_SIZE];
 	std::string strname = "\\Device\\NPF_";
 	strname += m_pCur->AdapterName;
@@ -475,4 +499,47 @@ void CwinpacptestDlg::OnBnClickedBtnSearch()
 	/* 开始捕获 */
 	//pcap_loop(m_adhandle, 0, packet_handler, NULL);
 	return;
+}
+
+
+void CwinpacptestDlg::OnBnClickedBtnTest()
+{
+	CString strIP = L"180.149.132.47";
+	CString strTIP = L"192.168.1.104";
+	int nIP = WStrToIP4(strTIP);
+	int nPort = 12345;
+	UCHAR pData[80] = { 0 };
+	DLC_HEAD dlc;
+	IPV4HeadFrame IPHead;
+	ICMPPing Ping;
+	dlc.Ethertype = 0x0800;  //IP
+	memcpy(dlc.SourceMAC, m_curMAC, 6);
+	memcpy(dlc.DestinationMAC, m_mapARP[nIP], 6);
+	SetDLCHEADData((char*)pData, dlc);
+	//
+	IPHead.Version = 4;
+	IPHead.HeadLength = 5;
+	IPHead.TypeofService = 0;
+	IPHead.TotalLength = 60;
+	IPHead.Identifier = 0x5713;
+	IPHead.Flags = 0;
+	IPHead.FragmentOffset = 0;
+	IPHead.TTL = 64;
+	IPHead.Protocol == IP_ICMP;
+	IPHead.HeaderChecksum = 0;
+	IPHead.SourceIP = WStrToIP4(L"192.168.1.108");
+	IPHead.DestinationIP = nIP;
+	
+	SetIPData(IPHead, (char*)(pData + 14));
+
+	Ping.ICMPData.HeaderChecksum = 0;
+	Ping.ICMPData.nCode = 0;
+	Ping.ICMPData.nType = 8;
+	Ping.nNo = 0xcd1e;
+	Ping.nNotify = 1;
+	SetICMPPingData(Ping,(char*)(pData + 34));
+	if (pcap_sendpacket(m_adhandle, (UCHAR*)pData, 74) != 0)
+	{
+		OutputDebugStringW(L"Test包失败");
+	}
 }
